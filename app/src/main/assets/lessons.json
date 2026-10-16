@@ -1,0 +1,197 @@
+[
+  {
+    "id": "chapter-1",
+    "title_en": "First week in Korea",
+    "title_bn": "কোরিয়ায় প্রথম সপ্তাহ",
+    "missions": [
+      {
+        "id": "m01",
+        "title_en": "Say hello",
+        "title_bn": "শুভেচ্ছা জানান",
+        "ko": "안녕하세요.",
+        "romanization": "annyeonghaseyo",
+        "bn": "হ্যালো।"
+      },
+      {
+        "id": "m02",
+        "title_en": "Say thank you",
+        "title_bn": "ধন্যবাদ জানান",
+        "ko": "감사합니다.",
+        "romanization": "gamsahamnida",
+        "bn": "ধন্যবাদ।"
+      },
+      {
+        "id": "m03",
+        "title_en": "Introduce yourself",
+        "title_bn": "নিজের পরিচয় দিন",
+        "ko": "저는 학생이에요.",
+        "romanization": "jeoneun haksaeng-ieyo",
+        "bn": "আমি একজন শিক্ষার্থী।"
+      },
+      {
+        "id": "m04",
+        "title_en": "Ask for help",
+        "title_bn": "সাহায্য চান",
+        "ko": "도와주세요.",
+        "romanization": "dowajuseyo",
+        "bn": "সাহায্য করুন।"
+      }
+    ]
+  },
+  {
+    "id": "chapter-2",
+    "title_en": "Food and cafes",
+    "title_bn": "খাবার ও ক্যাফে",
+    "missions": [
+      {
+        "id": "m05",
+        "title_en": "Order water",
+        "title_bn": "পানি চান",
+        "ko": "물 주세요.",
+        "romanization": "mul juseyo",
+        "bn": "পানি দিন।"
+      },
+      {
+        "id": "m06",
+        "title_en": "Order coffee",
+        "title_bn": "কফি চান",
+        "ko": "커피 주세요.",
+        "romanization": "keopi juseyo",
+        "bn": "কফি দিন।"
+      },
+      {
+        "id": "m07",
+        "title_en": "Ask the price",
+        "title_bn": "দাম জিজ্ঞেস করুন",
+        "ko": "얼마예요?",
+        "romanization": "eolmayeyo",
+        "bn": "কত দাম?"
+      },
+      {
+        "id": "m08",
+        "title_en": "Ask about spice",
+        "title_bn": "ঝাল সম্পর্কে জানুন",
+        "ko": "매워요?",
+        "romanization": "maewoyo",
+        "bn": "ঝাল কি?"
+      }
+    ]
+  },
+  {
+    "id": "chapter-3",
+    "title_en": "Transport",
+    "title_bn": "যাতায়াত",
+    "missions": [
+      {
+        "id": "m09",
+        "title_en": "Find the station",
+        "title_bn": "স্টেশন খুঁজুন",
+        "ko": "역이 어디예요?",
+        "romanization": "yeogi eodiyeyo",
+        "bn": "স্টেশন কোথায়?"
+      },
+      {
+        "id": "m10",
+        "title_en": "Ask about the bus",
+        "title_bn": "বাস সম্পর্কে জানুন",
+        "ko": "이 버스 맞아요?",
+        "romanization": "i beoseu majayo",
+        "bn": "এটাই কি সঠিক বাস?"
+      },
+      {
+        "id": "m11",
+        "title_en": "Buy one ticket",
+        "title_bn": "একটি টিকিট কিনুন",
+        "ko": "표 한 장 주세요.",
+        "romanization": "pyo han jang juseyo",
+        "bn": "একটি টিকিট দিন।"
+      },
+      {
+        "id": "m12",
+        "title_en": "Get off here",
+        "title_bn": "এখানে নামুন",
+        "ko": "여기서 내릴게요.",
+        "romanization": "yeogiseo naerilgeyo",
+        "bn": "আমি এখানে নামব।"
+      }
+    ]
+  },
+  {
+    "id": "chapter-4",
+    "title_en": "Bank/SIM/hospital",
+    "title_bn": "ব্যাংক/সিম/হাসপাতাল",
+    "missions": [
+      {
+        "id": "m13",
+        "title_en": "At the bank",
+        "title_bn": "ব্যাংকে",
+        "ko": "통장을 만들고 싶어요.",
+        "romanization": "tongjangeul mandeulgo sipeoyo",
+        "bn": "আমি একটি ব্যাংক অ্যাকাউন্ট খুলতে চাই।"
+      },
+      {
+        "id": "m14",
+        "title_en": "Get a SIM",
+        "title_bn": "সিম নিন",
+        "ko": "유심 주세요.",
+        "romanization": "yusim juseyo",
+        "bn": "একটি সিম দিন।"
+      },
+      {
+        "id": "m15",
+        "title_en": "Describe pain",
+        "title_bn": "ব্যথার কথা বলুন",
+        "ko": "배가 아파요.",
+        "romanization": "baega apayo",
+        "bn": "আমার পেট ব্যথা।"
+      },
+      {
+        "id": "m16",
+        "title_en": "Ask for an appointment",
+        "title_bn": "অ্যাপয়েন্টমেন্ট চান",
+        "ko": "예약하고 싶어요.",
+        "romanization": "yeyakhago sipeoyo",
+        "bn": "আমি অ্যাপয়েন্টমেন্ট নিতে চাই।"
+      }
+    ]
+  },
+  {
+    "id": "chapter-5",
+    "title_en": "University life",
+    "title_bn": "বিশ্ববিদ্যালয় জীবন",
+    "missions": [
+      {
+        "id": "m17",
+        "title_en": "Find the classroom",
+        "title_bn": "শ্রেণিকক্ষ খুঁজুন",
+        "ko": "교실이 어디예요?",
+        "romanization": "gyosiri eodiyeyo",
+        "bn": "শ্রেণিকক্ষ কোথায়?"
+      },
+      {
+        "id": "m18",
+        "title_en": "Ask to repeat",
+        "title_bn": "আবার বলতে বলুন",
+        "ko": "다시 말해 주세요.",
+        "romanization": "dasi malhae juseyo",
+        "bn": "আবার বলুন।"
+      },
+      {
+        "id": "m19",
+        "title_en": "Meet a classmate",
+        "title_bn": "সহপাঠীর সঙ্গে পরিচয়",
+        "ko": "같이 공부해요.",
+        "romanization": "gachi gongbuhaeyo",
+        "bn": "একসঙ্গে পড়াশোনা করি।"
+      },
+      {
+        "id": "m20",
+        "title_en": "Ask about homework",
+        "title_bn": "বাড়ির কাজ জানুন",
+        "ko": "숙제가 뭐예요?",
+        "romanization": "sukjega mwoyeyo",
+        "bn": "বাড়ির কাজ কী?"
+      }
+    ]
+  }
+]
