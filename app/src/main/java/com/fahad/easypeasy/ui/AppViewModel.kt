@@ -24,7 +24,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 @HiltViewModel
-class AppViewModel @Inject constructor(private val app: Application, private val dao: LearningDao, private val store: PreferenceStore, private val savedState: SavedStateHandle) : AndroidViewModel(app) {
+class AppViewModel @Inject constructor(private val app: Application, private val dao: LearningDao, private val store: PreferenceStore, private val savedState: SavedStateHandle, private val output: com.fahad.easypeasy.audio.AndroidSpeechOutput) : AndroidViewModel(app) {
     private val mutable = MutableStateFlow(AppState())
     val state = mutable.asStateFlow()
     private var sessionStarted = SystemClock.elapsedRealtime()
@@ -73,9 +73,16 @@ class AppViewModel @Inject constructor(private val app: Application, private val
         meetWord(); practiced = true
         mutable.update { it.copy(bubbles = it.bubbles + Bubble(mission.ko, true) + Bubble(mission.ko), hint = mission.bn) }
     }
-    fun replay(text: String) { /* Real offline Android TTS is connected in stage 4. */ }
+    fun replay(text: String) {
+        viewModelScope.launch {
+            try { output.stop(); output.speed = state.value.preferences.speed; output.speak(text) }
+            catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch (error: Exception) { mutable.update { it.copy(hint = error.message.orEmpty()) } }
+        }
+    }
     fun mute() { mutable.update { it.copy(muted = !it.muted) } }
     fun finishSession() {
+        output.stop()
         if (!practiced) return
         practiced = false
         val mission = state.value.mission ?: return
@@ -98,8 +105,10 @@ class AppViewModel @Inject constructor(private val app: Application, private val
     }
     fun download() { }
     fun pauseDownload() { }
-    fun startLive() { }
+    fun startLive() { mutable.update { it.copy(hint = "Live voice unavailable: Korean STT is not installed. This is a demo build.") } }
+    override fun onCleared() { output.stop(); super.onCleared() }
     fun reset() {
+        output.stop()
         viewModelScope.launch {
             runCatching {
                 dao.reset(); store.write(Preferences())
