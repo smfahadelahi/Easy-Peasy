@@ -23,6 +23,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
+import android.content.res.Configuration
+import java.util.Locale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.*
@@ -40,6 +43,13 @@ import java.time.LocalDate
 @Composable
 fun EasyPeasyApp(vm: AppViewModel = hiltViewModel()) {
     val state by vm.state.collectAsStateWithLifecycle()
+    val baseContext = LocalContext.current
+    val baseConfig = LocalConfiguration.current
+    val localizedConfig = remember(baseConfig, state.preferences.bangla) {
+        Configuration(baseConfig).apply { setLocale(Locale(if (state.preferences.bangla) "bn" else "en")) }
+    }
+    val localizedContext = remember(baseContext, localizedConfig) { baseContext.createConfigurationContext(localizedConfig) }
+    CompositionLocalProvider(LocalContext provides localizedContext, LocalConfiguration provides localizedConfig) {
     EasyPeasyTheme(state.preferences.dark) {
         val nav = rememberNavController()
         val route = nav.currentBackStackEntryAsState().value?.destination?.route
@@ -70,7 +80,7 @@ fun EasyPeasyApp(vm: AppViewModel = hiltViewModel()) {
                         vm.preferences(state.preferences.copy(onboarded = true)); nav.navigate("models") { popUpTo("onboarding") { inclusive = true } }
                     } }
                     composable("models") { ModelScreen(state, vm::download, vm::pauseDownload) { nav.navigate("home") { popUpTo(nav.graph.id) { inclusive = true } } } }
-                    composable("home") { HomeScreen(state) { nav.navigate(it) } }
+                    composable("home") { HomeScreen(state) { if (it == "chat") vm.selectMission(state.selectedMission); nav.navigate(it) } }
                     composable("plan") { PlanScreen(state) { vm.selectMission(it); nav.navigate("chat") } }
                     composable("chat") { VoiceScreen(state, vm::demoReply, vm::replay, vm::mute, vm::startLive) {
                         vm.finishSession(); nav.navigate("summary") { popUpTo("chat") { inclusive = true } }
@@ -89,6 +99,7 @@ fun EasyPeasyApp(vm: AppViewModel = hiltViewModel()) {
                 }
             }
         }
+    }
     }
 }
 
@@ -308,10 +319,11 @@ fun ScenarioScreen(state: AppState, select: (String) -> Unit) {
     }
 }
 @Composable
-fun SettingsScreen(state: AppState, update: (Preferences) -> Unit, reset: () -> Unit, export: () -> Unit, models: () -> Unit) {
+fun SettingsScreen(state: AppState, update: (Preferences) -> Unit, reset: () -> Unit, export: (android.net.Uri) -> Unit, models: () -> Unit) {
     val p = state.preferences
     var confirm by remember { mutableStateOf(false) }
     var licenses by remember { mutableStateOf(false) }
+    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri -> uri?.let(export) }
     Page(R.string.settings) {
         Toggle(R.string.language, p.bangla) { update(p.copy(bangla = it)) }
         Text("${stringResource(R.string.silence)}: ${"%.1f".format(p.silence)}")
@@ -326,7 +338,7 @@ fun SettingsScreen(state: AppState, update: (Preferences) -> Unit, reset: () -> 
         Text("${stringResource(R.string.reminder)}: ${p.reminderHour}:00")
         Slider(p.reminderHour.toFloat(), { update(p.copy(reminderHour = it.toInt())) }, valueRange = 0f..23f, steps = 22)
         Text(stringResource(R.string.storage) + ": ${state.storageGb} GB")
-        Action(R.string.models, models); Action(R.string.export, export)
+        Action(R.string.models, models); Action(R.string.export, { exportLauncher.launch("easy-peasy-data.json") })
         Action(R.string.licenses, { licenses = true }); Action(R.string.reset, { confirm = true })
         Text(stringResource(R.string.offline))
     }

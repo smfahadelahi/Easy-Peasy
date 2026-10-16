@@ -5,6 +5,7 @@ import com.fahad.easypeasy.data.Chapter
 data class WordView(val ko: String, val bn: String, val romanization: String, val due: Boolean = true)
 data class SessionView(val id: Long, val missionId: String, val minutes: Int, val summary: String, val day: String)
 data class Bubble(val text: String, val learner: Boolean = false)
+@kotlinx.serialization.Serializable
 data class Preferences(
     val onboarded: Boolean = false, val bangla: Boolean = false, val silence: Float = 3.5f,
     val speed: Float = 0.85f, val dailyMinutes: Int = 10, val romanization: Boolean = true,
