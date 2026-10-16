@@ -24,12 +24,20 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 @HiltViewModel
-class AppViewModel @Inject constructor(private val app: Application, private val dao: LearningDao, private val store: PreferenceStore, private val savedState: SavedStateHandle, private val output: com.fahad.easypeasy.audio.AndroidSpeechOutput) : AndroidViewModel(app) {
+class AppViewModel @Inject constructor(private val app: Application, private val dao: LearningDao, private val store: PreferenceStore, private val savedState: SavedStateHandle, private val output: com.fahad.easypeasy.audio.AndroidSpeechOutput, private val downloads: com.fahad.easypeasy.models.ModelDownloads) : AndroidViewModel(app) {
     private val mutable = MutableStateFlow(AppState())
     val state = mutable.asStateFlow()
     private var sessionStarted = SystemClock.elapsedRealtime()
     private var practiced = false
     init {
+        viewModelScope.launch {
+            downloads.status.collect { infos ->
+                val info = infos.firstOrNull() ?: return@collect
+                mutable.update { it.copy(downloadState = info.state.name,
+                    downloadedBytes = if (info.state == androidx.work.WorkInfo.State.SUCCEEDED) com.fahad.easypeasy.engine.ModelCatalog.silero.bytes else info.progress.getLong("bytes", 0),
+                    downloadError = info.outputData.getString("error").orEmpty()) }
+            }
+        }
         reload()
         viewModelScope.launch {
             combine(dao.sessions(), dao.words(), dao.streaks()) { sessions, words, streaks ->
@@ -103,8 +111,8 @@ class AppViewModel @Inject constructor(private val app: Application, private val
             }.onFailure { fail(it) }
         }
     }
-    fun download() { }
-    fun pauseDownload() { }
+    fun download() { downloads.start(state.value.preferences.wifiOnly) }
+    fun pauseDownload() { downloads.pause() }
     fun startLive() { mutable.update { it.copy(hint = "Live voice unavailable: Korean STT is not installed. This is a demo build.") } }
     override fun onCleared() { output.stop(); super.onCleared() }
     fun reset() {

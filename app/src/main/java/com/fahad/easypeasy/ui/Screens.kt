@@ -157,8 +157,13 @@ fun ModelScreen(state: AppState, download: () -> Unit, pause: () -> Unit, next: 
         }
         Text(stringResource(R.string.missing_models))
         DemoBanner()
-        Action(R.string.download, download, enabled = false)
-        Action(R.string.pause, pause, enabled = false)
+        Text("Silero VAD • 2.3 MB • MIT")
+        Text(state.downloadState, style = MaterialTheme.typography.labelLarge)
+        if (state.downloadedBytes > 0) LinearProgressIndicator(progress = { (state.downloadedBytes.toFloat() / com.fahad.easypeasy.engine.ModelCatalog.silero.bytes).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
+        if (state.downloadError.isNotBlank()) Text(state.downloadError, color = MaterialTheme.colorScheme.error)
+        Action(if (state.downloadState in listOf("FAILED", "CANCELLED")) R.string.retry else R.string.download, download,
+            enabled = state.downloadState !in listOf("RUNNING", "ENQUEUED", "SUCCEEDED"))
+        Action(R.string.pause, pause, enabled = state.downloadState in listOf("RUNNING", "ENQUEUED"))
         Action(R.string.continue_label, next)
     }
 }

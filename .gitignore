@@ -8,7 +8,7 @@ local.properties
 *.keystore
 *.p12
 *.hprof
-models/
+/models/
 *.task
 *.onnx
 *.gguf

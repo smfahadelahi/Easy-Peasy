@@ -18,6 +18,7 @@ data class AppState(
     val sessions: List<SessionView> = emptyList(), val words: List<WordView> = emptyList(),
     val bubbles: List<Bubble> = emptyList(), val selectedMission: String = "m01",
     val hint: String = "", val phase: String = "IDLE", val muted: Boolean = false,
+    val downloadState: String = "NOT_DOWNLOADED", val downloadedBytes: Long = 0, val downloadError: String = "",
     val memoryGb: Int = 0, val storageGb: Long = 0, val streak: Int = 0,
 ) {
     val missions get() = chapters.flatMap { it.missions }
