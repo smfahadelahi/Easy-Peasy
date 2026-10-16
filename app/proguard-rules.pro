@@ -1,0 +1,3 @@
+-keepattributes Signature,InnerClasses,EnclosingMethod
+-keep class com.fahad.easypeasy.engine.TutorReply { *; }
+-keep class * extends androidx.work.ListenableWorker { public <init>(...); }
