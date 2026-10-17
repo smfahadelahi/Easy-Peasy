@@ -34,14 +34,24 @@ jobs:
           patch = subprocess.check_output(['git', 'diff', '--', '*.kt', '*.kts'])
           if patch:
               data = base64.b64encode(gzip.compress(patch)).decode()
-              for i in range(0, len(data), 30000):
-                  notice('Formatting patch', 'PATCH64:' + data[i:i+30000])
+              for i in range(0, min(len(data), 24000), 3000):
+                  notice('Formatting patch', f'PATCH64:{i:06d}:' + data[i:i+3000])
           for name in ['sdk.log', 'validation.log']:
               log = pathlib.Path(name)
               if log.exists():
                   notice(name, '\n'.join(log.read_text().splitlines()[-120:]))
           PY
           git diff -- '*.kt' '*.kts' > formatting.patch
+      - name: Report remaining formatting
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import gzip, base64, subprocess
+          patch = subprocess.check_output(['git', 'diff', '--', '*.kt', '*.kts'])
+          data = base64.b64encode(gzip.compress(patch)).decode()
+          for i in range(24000, len(data), 3000):
+              print(f'::notice title=Formatting patch::PATCH64:{i:06d}:' + data[i:i+3000])
+          PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
