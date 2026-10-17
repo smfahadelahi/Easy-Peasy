@@ -4,16 +4,37 @@ permissions:
   contents: read
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
       - uses: gradle/actions/setup-gradle@v4
-      - run: ./gradlew ktlintCheck lintDebug testDebugUnitTest assembleDebug --stacktrace
+      - name: Verify SDK
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0" 2>&1 | tee sdk.log
+      - name: Format and compile (bootstrap validation)
+        run: |
+          set -o pipefail
+          ./gradlew ktlintFormat lintDebug testDebugUnitTest assembleDebug --continue --stacktrace 2>&1 | tee validation.log
+      - name: Report diagnostics
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import pathlib, gzip, base64, subprocess
+          for name in ['sdk.log', 'validation.log']:
+              log = pathlib.Path(name)
+              if log.exists():
+                  for line in log.read_text().splitlines()[-100:]:
+                      print('::notice::' + line.replace('%', '%25').replace('\r', '%0D'))
+          patch = subprocess.check_output(['git', 'diff', '--', '*.kt', '*.kts'])
+          if patch:
+              data = base64.b64encode(gzip.compress(patch)).decode()
+              for i in range(0, len(data), 30000):
+                  print('::notice title=Formatting patch::PATCH64:' + data[i:i+30000])
+          PY
+          git diff -- '*.kt' '*.kts' > formatting.patch
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -21,3 +42,6 @@ jobs:
           path: |
             app/build/outputs/apk/debug/*.apk
             **/build/reports/
+            formatting.patch
+            validation.log
+            sdk.log

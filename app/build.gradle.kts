@@ -1,7 +1,3 @@
-// Product identity: edit here when forking.
-val productApplicationId = "com.fahad.easypeasy"
-val productVersionName = "1.0.0"
-val productVersionCode = 1
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -11,6 +7,11 @@ plugins {
     alias(libs.plugins.hilt)
     alias(libs.plugins.ktlint)
 }
+// Product identity: edit here when forking.
+val productApplicationId = "com.fahad.easypeasy"
+val productVersionName = "1.0.0"
+val productVersionCode = 1
+
 val signingEnvironment = listOf("KEYSTORE_PATH", "KEYSTORE_PASSWORD", "KEY_ALIAS", "KEY_PASSWORD")
 val hasReleaseSigning = signingEnvironment.all { !System.getenv(it).isNullOrBlank() }
 android {
@@ -77,6 +78,7 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.coroutines.test)
     androidTestImplementation(libs.androidx.test)
+    androidTestImplementation(libs.androidx.test.core)
     androidTestImplementation(libs.androidx.runner)
     androidTestImplementation(libs.room.testing)
     androidTestImplementation(libs.coroutines.test)
