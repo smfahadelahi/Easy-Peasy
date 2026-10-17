@@ -13,7 +13,12 @@ jobs:
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
       - name: Verify SDK
-        run: sdkmanager "platforms;android-35" "build-tools;35.0.0" 2>&1 | tee sdk.log
+        shell: bash
+        run: |
+          set -euo pipefail
+          manager="$(find "${ANDROID_HOME:?}/cmdline-tools" -type f -name sdkmanager | sort -V | tail -1)"
+          test -n "$manager"
+          "$manager" "platforms;android-35" "build-tools;35.0.0" 2>&1 | tee sdk.log
       - name: Format and compile (bootstrap validation)
         run: |
           set -o pipefail
@@ -23,16 +28,18 @@ jobs:
         run: |
           python3 - <<'PY'
           import pathlib, gzip, base64, subprocess
-          for name in ['sdk.log', 'validation.log']:
-              log = pathlib.Path(name)
-              if log.exists():
-                  for line in log.read_text().splitlines()[-100:]:
-                      print('::notice::' + line.replace('%', '%25').replace('\r', '%0D'))
+          def notice(title, text):
+              escaped = text.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+              print('::notice title=' + title + '::' + escaped)
           patch = subprocess.check_output(['git', 'diff', '--', '*.kt', '*.kts'])
           if patch:
               data = base64.b64encode(gzip.compress(patch)).decode()
               for i in range(0, len(data), 30000):
-                  print('::notice title=Formatting patch::PATCH64:' + data[i:i+30000])
+                  notice('Formatting patch', 'PATCH64:' + data[i:i+30000])
+          for name in ['sdk.log', 'validation.log']:
+              log = pathlib.Path(name)
+              if log.exists():
+                  notice(name, '\n'.join(log.read_text().splitlines()[-120:]))
           PY
           git diff -- '*.kt' '*.kts' > formatting.patch
       - uses: actions/upload-artifact@v4
