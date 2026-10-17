@@ -17,13 +17,26 @@ object ReplyParser {
         parsed
     }.getOrNull()
     fun firstSentence(raw: String): String? {
-        // Only speak decoded reply_ko, never raw JSON, markdown or partial escape sequences.
-        val field = Regex("""["]reply_ko["]\s*:\s*(["](?:[^"\\]|\\.)*["])""").find(raw)?.groupValues?.get(1) ?: return null
-        val text = runCatching { json.decodeFromString<String>(field) }.getOrNull() ?: return null
-        if (text.length > 240) return null
-        val first = sentences(text).firstOrNull() ?: return null
-        return first.takeIf { it.last() in ".!?。！？" }
+        // Stream only the first field of the documented schema, never a match inside another string.
+        val prefix = Regex("""^\s*\{\s*["]reply_ko["]\s*:\s*["]""").find(raw) ?: return null
+        val encoded = StringBuilder()
+        var escaped = false
+        for (index in (prefix.range.last + 1) until raw.length) {
+            val char = raw[index]
+            if (char == '"' && !escaped) break
+            encoded.append(char)
+            escaped = if (char == '\\' && !escaped) true else false
+            if (encoded.length > 1500) return null
+            // Decoder rejects incomplete escapes and control characters. A synthetic closing quote
+            // lets us speak a full sentence before the rest of reply_ko has arrived.
+            val decoded = runCatching { json.decodeFromString<String>("\"$encoded\"") }.getOrNull() ?: continue
+            if (decoded.length > 240) return null
+            val boundary = decoded.indexOfFirst { it in ".!?。！？" }
+            if (boundary >= 0) return decoded.substring(0, boundary + 1).trim()
+        }
+        return null
     }
+    fun firstCompleteSentence(text: String): String = sentences(text).firstOrNull().orEmpty()
     fun fallback() = TutorReply("다시 말해 주세요.", "আবার বলুন। ধীরে বললেও ঠিক আছে।", "", "", false)
 }
 object PromptBuilder {

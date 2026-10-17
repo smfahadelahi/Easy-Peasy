@@ -28,7 +28,20 @@ interface LearningDao {
     @Update suspend fun updateWord(word: WordEntity)
     @Insert suspend fun insertSession(session: SessionEntity): Long
     @Insert suspend fun insertMistakes(mistakes: List<MistakeEntity>)
-    @Query("INSERT INTO streaks(day, sessionCount) VALUES(:day, 1) ON CONFLICT(day) DO UPDATE SET sessionCount = sessionCount + 1") suspend fun incrementStreak(day: String)
+    @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun insertStreak(streak: StreakEntity)
+    @Query("UPDATE streaks SET sessionCount = sessionCount + 1 WHERE day = :day") suspend fun addStreakSession(day: String)
+    @Transaction suspend fun incrementStreak(day: String) {
+        // Android 8 ships SQLite 3.18, before INSERT ... ON CONFLICT DO UPDATE support.
+        insertStreak(StreakEntity(day, 0))
+        addStreakSession(day)
+    }
+    @Transaction suspend fun reviewWord(ko: String, remembered: Boolean, now: Long) {
+        val old = word(ko) ?: return
+        val next = com.fahad.easypeasy.engine.SpacedRepetition.review(
+            com.fahad.easypeasy.engine.SpacedRepetition.Schedule(old.intervalDays, old.repetitions, old.ease, old.dueAt), remembered, now,
+        )
+        updateWord(old.copy(intervalDays = next.intervalDays, repetitions = next.repetitions, ease = next.ease, dueAt = next.dueAt))
+    }
     @Query("DELETE FROM mistakes") suspend fun clearMistakes()
     @Query("DELETE FROM sessions") suspend fun clearSessions()
     @Query("DELETE FROM words") suspend fun clearWords()
@@ -39,7 +52,10 @@ interface LearningDao {
         incrementStreak(session.day)
         return id
     }
+    @Transaction suspend fun exportSnapshot() = ExportSnapshot(allSessions(), allWords(), allMistakes())
     @Transaction suspend fun reset() { clearMistakes(); clearSessions(); clearWords(); clearStreaks() }
 }
+data class ExportSnapshot(val sessions: List<SessionEntity>, val words: List<WordEntity>, val mistakes: List<MistakeEntity>)
+
 @Database(entities = [SessionEntity::class, WordEntity::class, MistakeEntity::class, StreakEntity::class], version = 1, exportSchema = true)
 abstract class LearningDatabase : RoomDatabase() { abstract fun learningDao(): LearningDao }

@@ -75,7 +75,7 @@
     <string name="retry">Retry</string>
     <string name="pause">Pause</string>
     <string name="download">Download verified model</string>
-    <string name="missing_models">Voice AI is not ready. This build has no verified model downloads or speech recognizer. Explore the clearly labeled demo instead.</string>
+    <string name="missing_models">Voice AI is not ready. Only the VAD download is verified; Korean speech recognition and Gemma are not installed. Explore the clearly labeled demo instead.</string>
     <string name="storage">Free internal storage</string>
     <string name="permission_denied">Microphone permission is off. Enable it in Android settings for live voice; demo does not need it.</string>
     <string name="low_memory">Limited memory: use a small model and close other apps. Live AI is disabled until all engines are ready.</string>
@@ -86,4 +86,18 @@
     <string name="show_word">Meet this phrase</string>
     <string name="start_live">Start live microphone session</string>
     <string name="stop">Stop</string>
+<string name="some_basics">Some basics</string>
+<string name="intermediate">Intermediate</string>
+<string name="goal_study">Study in Korea</string>
+<string name="goal_work">Work in Korea</string>
+<string name="reminders_enabled">Enable daily reminders</string>
+<string name="reminder_body">One tiny Korean phrase. You can do this.</string>
+<string name="tts_error">Offline Korean speech is unavailable. Install a Korean voice in Android Text-to-speech settings.</string>
+<string name="not_ready">Voice AI not ready</string>
+<string name="orb_idle">Ready for practice</string>
+<string name="orb_listening">Listening</string>
+<string name="orb_thinking">Thinking</string>
+<string name="orb_speaking">Speaking</string>
+<string name="no_network_needed">Lessons and reviews work without internet.</string>
+<string name="minutes">min</string>
 </resources>

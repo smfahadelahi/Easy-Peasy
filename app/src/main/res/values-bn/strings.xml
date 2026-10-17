@@ -75,7 +75,7 @@
     <string name="retry">আবার চেষ্টা</string>
     <string name="pause">বিরতি</string>
     <string name="download">যাচাইকৃত মডেল নামান</string>
-    <string name="missing_models">ভয়েস AI প্রস্তুত নয়। এই বিল্ডে যাচাইকৃত মডেল ডাউনলোড বা স্পিচ রিকগনাইজার নেই। ডেমো দেখতে পারেন।</string>
+    <string name="missing_models">ভয়েস AI প্রস্তুত নয়। শুধু VAD ডাউনলোড যাচাইকৃত; কোরিয়ান স্পিচ রিকগনিশন ও Gemma ইনস্টল নেই। ডেমো দেখতে পারেন।</string>
     <string name="storage">ফাঁকা অভ্যন্তরীণ স্টোরেজ</string>
     <string name="permission_denied">মাইক্রোফোনের অনুমতি বন্ধ। লাইভ কথার জন্য অ্যান্ড্রয়েড সেটিংসে চালু করুন; ডেমোতে লাগে না।</string>
     <string name="low_memory">মেমরি কম: ছোট মডেল ব্যবহার করুন ও অন্য অ্যাপ বন্ধ করুন। সব ইঞ্জিন প্রস্তুত না হওয়া পর্যন্ত লাইভ AI বন্ধ।</string>
@@ -86,4 +86,18 @@
     <string name="show_word">বাক্যটির সঙ্গে পরিচিত হন</string>
     <string name="start_live">লাইভ মাইক্রোফোন চালু করুন</string>
     <string name="stop">থামুন</string>
+<string name="some_basics">কিছুটা জানি</string>
+<string name="intermediate">মধ্যম</string>
+<string name="goal_study">কোরিয়ায় পড়াশোনা</string>
+<string name="goal_work">কোরিয়ায় কাজ</string>
+<string name="reminders_enabled">দৈনিক মনে করানো চালু করুন</string>
+<string name="reminder_body">একটি ছোট্ট কোরিয়ান বাক্য। আপনি পারবেন।</string>
+<string name="tts_error">অফলাইন কোরিয়ান কণ্ঠ নেই। অ্যান্ড্রয়েড টেক্সট টু স্পিচ সেটিংসে কোরিয়ান কণ্ঠ ইনস্টল করুন।</string>
+<string name="not_ready">ভয়েস AI প্রস্তুত নয়</string>
+<string name="orb_idle">অনুশীলনের জন্য প্রস্তুত</string>
+<string name="orb_listening">শুনছি</string>
+<string name="orb_thinking">ভাবছি</string>
+<string name="orb_speaking">বলছি</string>
+<string name="no_network_needed">ইন্টারনেট ছাড়াই পাঠ ও ঝালাই চলবে।</string>
+<string name="minutes">মিনিট</string>
 </resources>

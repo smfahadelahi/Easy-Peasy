@@ -1,7 +1,6 @@
 package com.fahad.easypeasy.ui
 
 import android.Manifest
-import android.content.Intent
 import android.content.pm.PackageManager
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -19,6 +18,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -32,6 +32,10 @@ import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -52,9 +56,13 @@ fun EasyPeasyApp(vm: AppViewModel = hiltViewModel()) {
     CompositionLocalProvider(LocalContext provides localizedContext, LocalConfiguration provides localizedConfig) {
     EasyPeasyTheme(state.preferences.dark) {
         val nav = rememberNavController()
+        val snackbar = remember { SnackbarHostState() }
+        LaunchedEffect(state.notice) {
+            state.notice?.let { snackbar.showSnackbar(it); vm.dismissNotice() }
+        }
         val route = nav.currentBackStackEntryAsState().value?.destination?.route
         val mainRoutes = listOf("home", "plan", "progress", "settings")
-        Scaffold(bottomBar = {
+        Scaffold(snackbarHost = { SnackbarHost(snackbar) }, bottomBar = {
             if (route in mainRoutes) NavigationBar {
                 mainRoutes.forEachIndexed { i, target ->
                     val labels = listOf(R.string.home, R.string.plan, R.string.progress, R.string.settings)
@@ -75,7 +83,9 @@ fun EasyPeasyApp(vm: AppViewModel = hiltViewModel()) {
                         Text(stringResource(R.string.error), style = MaterialTheme.typography.headlineMedium)
                         Text(state.error.orEmpty()); Action(R.string.retry, vm::reload)
                     }
-                } else NavHost(nav, startDestination = if (state.preferences.onboarded) "home" else "onboarding") {
+                } else {
+                    val start = remember { if (state.preferences.onboarded) "home" else "onboarding" }
+                    NavHost(nav, startDestination = start) {
                     composable("onboarding") { OnboardingScreen(state, vm::preferences) {
                         vm.preferences(state.preferences.copy(onboarded = true)); nav.navigate("models") { popUpTo("onboarding") { inclusive = true } }
                     } }
@@ -89,7 +99,11 @@ fun EasyPeasyApp(vm: AppViewModel = hiltViewModel()) {
                     composable("vocab") { VocabScreen(state, vm::gradeWord, vm::replay) }
                     composable("progress") { ProgressScreen(state) }
                     composable("scenarios") { ScenarioScreen(state) { vm.selectMission(it); nav.navigate("chat") } }
-                    composable("settings") { SettingsScreen(state, vm::preferences, vm::reset, vm::exportData) { nav.navigate("models") } }
+                    composable("settings") { SettingsScreen(state, vm::preferences, {
+                        vm.reset()
+                        nav.navigate("onboarding") { popUpTo(nav.graph.id) { inclusive = true } }
+                    }, vm::exportData) { nav.navigate("models") } }
+                }
                 }
                 if (route !in mainRoutes && route !in listOf("chat", "onboarding", "models", null)) {
                     // System/predictive back remains the primary navigation affordance.
@@ -138,8 +152,14 @@ fun OnboardingScreen(state: AppState, update: (Preferences) -> Unit, next: () ->
             FilterChip(!state.preferences.bangla, { update(state.preferences.copy(bangla = false)) }, { Text("English") })
             FilterChip(state.preferences.bangla, { update(state.preferences.copy(bangla = true)) }, { Text("বাংলা") })
         }
-        Text("${stringResource(R.string.level)}: ${stringResource(R.string.beginner)}")
-        Text("${stringResource(R.string.goal)}: ${stringResource(R.string.goal_default)}")
+        Text(stringResource(R.string.level))
+        listOf(R.string.beginner, R.string.some_basics, R.string.intermediate).forEachIndexed { index, label ->
+            FilterChip(state.preferences.proficiency == index, { update(state.preferences.copy(proficiency = index)) }, { Text(stringResource(label)) })
+        }
+        Text(stringResource(R.string.goal))
+        listOf(R.string.goal_default, R.string.goal_study, R.string.goal_work).forEachIndexed { index, label ->
+            FilterChip(state.preferences.goal == index, { update(state.preferences.copy(goal = index)) }, { Text(stringResource(label)) })
+        }
         Text("${stringResource(R.string.daily_time)}: ${state.preferences.dailyMinutes}")
         Slider(state.preferences.dailyMinutes.toFloat(), { update(state.preferences.copy(dailyMinutes = it.toInt())) }, valueRange = 5f..30f, steps = 4)
         Tile { Text(stringResource(R.string.mic_explanation)) }
@@ -151,7 +171,8 @@ fun ModelScreen(state: AppState, download: () -> Unit, pause: () -> Unit, next: 
     Page(R.string.model_setup) {
         Text(stringResource(R.string.offline))
         Tile {
-            Text("RAM: ${state.memoryGb} GB • Gemma ${if (state.memoryGb >= 8) "4B" else "1B"}")
+            Text("RAM: ${state.memoryGb} GB")
+            Text(state.recommendedModel)
             Text("${stringResource(R.string.storage)}: ${state.storageGb} GB")
             if (state.storageGb < 4) Text(stringResource(R.string.low_memory), color = MaterialTheme.colorScheme.error)
         }
@@ -174,7 +195,7 @@ fun HomeScreen(state: AppState, open: (String) -> Unit) {
         Tile {
             Text(stringResource(R.string.mission), style = MaterialTheme.typography.labelLarge)
             Text(if (state.preferences.bangla) state.mission?.title_bn.orEmpty() else state.mission?.title_en.orEmpty(), style = MaterialTheme.typography.headlineSmall)
-            Text(state.mission?.ko.orEmpty(), style = MaterialTheme.typography.titleLarge)
+            Text(state.mission?.ko.orEmpty(), fontFamily = FontFamily(Font(R.font.noto_sans_kr)), style = MaterialTheme.typography.titleLarge)
             Action(R.string.start_chat, { open("chat") })
         }
         val today = LocalDate.now().toString()
@@ -191,7 +212,8 @@ fun HomeScreen(state: AppState, open: (String) -> Unit) {
 }
 @Composable
 fun Mascot(phase: String, reduceMotion: Boolean) {
-    // No continuous animation: also safe for Android's system animator scale = 0.
+    val scale by animateFloatAsState(if (reduceMotion || phase == "IDLE") 1f else 1.05f, label = "orb")
+    val label = stringResource(when (phase) { "LISTENING" -> R.string.orb_listening; "THINKING" -> R.string.orb_thinking; "SPEAKING" -> R.string.orb_speaking; else -> R.string.orb_idle })
     val color = when (phase) {
         "LISTENING" -> MaterialTheme.colorScheme.secondaryContainer
         "THINKING" -> MaterialTheme.colorScheme.tertiaryContainer
@@ -199,13 +221,13 @@ fun Mascot(phase: String, reduceMotion: Boolean) {
         else -> MaterialTheme.colorScheme.surfaceVariant
     }
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-        Image(painterResource(R.drawable.mascot), phase, Modifier.size(if (reduceMotion) 136.dp else 144.dp).clip(CircleShape).background(color).padding(8.dp))
-        Text(phase, style = MaterialTheme.typography.labelLarge, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+        Image(painterResource(R.drawable.mascot), null, Modifier.graphicsLayer { scaleX = scale; scaleY = scale }.size(144.dp).clip(CircleShape).background(color).padding(8.dp))
+        Text(label, style = MaterialTheme.typography.labelLarge, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
     }
 }
 @Composable
 fun VoiceScreen(state: AppState, send: () -> Unit, replay: (String) -> Unit, mute: () -> Unit, live: () -> Unit, finish: () -> Unit) {
-    var exit by remember { mutableStateOf(false) }
+    var exit by rememberSaveable { mutableStateOf(false) }
     var translated by remember { mutableStateOf(false) }
     var help by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -218,7 +240,7 @@ fun VoiceScreen(state: AppState, send: () -> Unit, replay: (String) -> Unit, mut
         item { Mascot(state.phase, state.preferences.reduceMotion) }
         item { Tile {
             Text(stringResource(R.string.show_word), style = MaterialTheme.typography.labelLarge)
-            Text(state.mission?.ko.orEmpty(), style = MaterialTheme.typography.headlineSmall)
+            Text(state.mission?.ko.orEmpty(), fontFamily = FontFamily(Font(R.font.noto_sans_kr)), style = MaterialTheme.typography.headlineSmall)
             if (state.preferences.romanization) Text(state.mission?.romanization.orEmpty())
             if (state.preferences.hints || translated || help) Text(state.mission?.bn.orEmpty())
         } }
@@ -237,7 +259,7 @@ fun VoiceScreen(state: AppState, send: () -> Unit, replay: (String) -> Unit, mut
             else permission.launch(Manifest.permission.RECORD_AUDIO)
         }, enabled = false) }
         item { Action(R.string.translate, { translated = !translated }); Action(R.string.replay, { replay(state.mission?.ko.orEmpty()) }) }
-        item { Action(R.string.help, { help = !help }); Action(if (state.muted) R.string.unmute else R.string.mute, mute) }
+        item { Action(R.string.help, { help = !help }); Action(if (state.muted) R.string.unmute else R.string.mute, mute, enabled = false) }
         item { Action(R.string.finish, { exit = true }) }
     }
     if (exit) AlertDialog(onDismissRequest = { exit = false }, title = { Text(stringResource(R.string.exit_title)) }, text = { Text(stringResource(R.string.exit_body)) }, confirmButton = { TextButton(onClick = { exit = false; finish() }) { Text(stringResource(R.string.finish)) } }, dismissButton = { TextButton(onClick = { exit = false }) { Text(stringResource(R.string.cancel)) } })
@@ -254,12 +276,12 @@ fun SummaryScreen(state: AppState, next: () -> Unit) {
 }
 @Composable
 fun VocabScreen(state: AppState, grade: (String, Boolean) -> Unit, replay: (String) -> Unit) {
-    var revealed by remember { mutableStateOf(false) }
     val word = state.words.firstOrNull { it.due }
+    var revealed by remember(word?.ko) { mutableStateOf(false) }
     Page(R.string.vocab) {
         if (word == null) Text(stringResource(R.string.empty_vocab)) else {
             Tile {
-                Text(word.ko, style = MaterialTheme.typography.headlineMedium)
+                Text(word.ko, fontFamily = FontFamily(Font(R.font.noto_sans_kr)), style = MaterialTheme.typography.headlineMedium)
                 if (state.preferences.romanization) Text(word.romanization)
                 if (revealed) Text(word.bn)
                 Action(R.string.reveal, { revealed = true })
@@ -328,6 +350,8 @@ fun SettingsScreen(state: AppState, update: (Preferences) -> Unit, reset: () -> 
     val p = state.preferences
     var confirm by remember { mutableStateOf(false) }
     var licenses by remember { mutableStateOf(false) }
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> if (granted) update(p.copy(reminderEnabled = true)) }
+    val context = LocalContext.current
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri -> uri?.let(export) }
     Page(R.string.settings) {
         Toggle(R.string.language, p.bangla) { update(p.copy(bangla = it)) }
@@ -340,6 +364,10 @@ fun SettingsScreen(state: AppState, update: (Preferences) -> Unit, reset: () -> 
         Toggle(R.string.dark, p.dark) { update(p.copy(dark = it)) }
         Toggle(R.string.reduce_motion, p.reduceMotion) { update(p.copy(reduceMotion = it)) }
         Toggle(R.string.wifi, p.wifiOnly) { update(p.copy(wifiOnly = it)) }
+        Toggle(R.string.reminders_enabled, p.reminderEnabled) { enabled ->
+            if (enabled && android.os.Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            else update(p.copy(reminderEnabled = enabled))
+        }
         Text("${stringResource(R.string.reminder)}: ${p.reminderHour}:00")
         Slider(p.reminderHour.toFloat(), { update(p.copy(reminderHour = it.toInt())) }, valueRange = 0f..23f, steps = 22)
         Text(stringResource(R.string.storage) + ": ${state.storageGb} GB")
@@ -348,12 +376,13 @@ fun SettingsScreen(state: AppState, update: (Preferences) -> Unit, reset: () -> 
         Text(stringResource(R.string.offline))
     }
     if (confirm) AlertDialog(onDismissRequest = { confirm = false }, text = { Text(stringResource(R.string.reset_confirm)) }, confirmButton = { TextButton(onClick = { reset(); confirm = false }) { Text(stringResource(R.string.delete)) } }, dismissButton = { TextButton(onClick = { confirm = false }) { Text(stringResource(R.string.back)) } })
-    if (licenses) AlertDialog(onDismissRequest = { licenses = false }, title = { Text(stringResource(R.string.licenses)) }, text = { Text("AndroidX, Kotlin, Hilt, ONNX Runtime, MediaPipe. Full notices: THIRD_PARTY_NOTICES.md in the source repository. Models are not bundled. Noto fonts: SIL OFL 1.1 on supported Android systems.") }, confirmButton = { TextButton(onClick = { licenses = false }) { Text(stringResource(R.string.back)) } })
+    if (licenses) AlertDialog(onDismissRequest = { licenses = false }, title = { Text(stringResource(R.string.licenses)) }, text = { Text("AndroidX, Kotlin, Hilt, ONNX Runtime, MediaPipe. Full notices: THIRD_PARTY_NOTICES.md in the source repository. Models are not bundled. Bundled Noto fonts: SIL OFL 1.1.") }, confirmButton = { TextButton(onClick = { licenses = false }) { Text(stringResource(R.string.back)) } })
 }
 @Composable
 private fun Toggle(label: Int, checked: Boolean, change: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(stringResource(label), Modifier.weight(1f)); Switch(checked, change, modifier = Modifier.semantics { contentDescription = "" })
+        Text(stringResource(label), Modifier.weight(1f)); val description = stringResource(label)
+        Switch(checked, change, modifier = Modifier.semantics { contentDescription = description })
     }
 }
 

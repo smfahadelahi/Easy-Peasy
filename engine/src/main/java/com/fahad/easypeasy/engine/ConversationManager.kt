@@ -35,7 +35,7 @@ class ConversationManager(
         mutable.value = ConversationState.LISTENING
     }
     fun utterance(pcm: ShortArray) {
-        if (mutable.value != ConversationState.LISTENING || pcm.isEmpty()) return
+        if (mutable.value != ConversationState.LISTENING || pcm.isEmpty()) { pcm.fill(0); return }
         val token = ++epoch
         mutable.value = ConversationState.THINKING
         turn = scope.launch {
@@ -63,15 +63,22 @@ class ConversationManager(
                 var parsed = ReplyParser.parse(raw, memory.knownWords.toSet())
                 if (parsed == null) {
                     var retry = ""
-                    withTimeout(45_000) { model.stream(prompt + "\nReturn valid JSON with all five fields; no markdown.").collect { require(retry.length + it.length <= 8192); retry += it } }
-                    parsed = ReplyParser.parse(retry, memory.knownWords.toSet())
+                    try {
+                        withTimeout(45_000) { model.stream(prompt + "\nReturn valid JSON with all five fields; no markdown.").collect { require(retry.length + it.length <= 8192); retry += it } }
+                        parsed = ReplyParser.parse(retry, memory.knownWords.toSet())
+                    } catch (timeout: TimeoutCancellationException) {
+                        // A malformed response still gets a bounded safe fallback.
+                    } catch (cancelled: CancellationException) { throw cancelled
+                    } catch (error: Exception) { /* Safe fallback below. */ }
                 }
                 val reply = parsed ?: ReplyParser.fallback()
                 firstPlayback?.join()
                 if (token != epoch) return@launch
                 repliesMutable.emit(reply)
-                val remaining = if (first != null && reply.reply_ko.startsWith(first!!)) reply.reply_ko.removePrefix(first!!).trim() else reply.reply_ko
+                val remaining = if (first != null && reply.reply_ko.startsWith(first!!)) reply.reply_ko.removePrefix(first!!).trim() else if (first != null) ReplyParser.firstCompleteSentence(reply.reply_ko) else reply.reply_ko
                 if (remaining.isNotBlank()) { mutable.value = ConversationState.SPEAKING; output.speak(remaining) }
+            } catch (timeout: TimeoutCancellationException) {
+                if (epoch == token) { output.stop(); errorsMutable.emit("The model took too long. Please try a shorter phrase.") }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
@@ -81,6 +88,7 @@ class ConversationManager(
                 if (epoch == token && mutable.value != ConversationState.IDLE) mutable.value = ConversationState.LISTENING
             }
         }
+        turn?.invokeOnCompletion { pcm.fill(0) }
     }
     fun stop() {
         epoch++; turn?.cancel(); turn = null; output.stop(); mutable.value = ConversationState.IDLE

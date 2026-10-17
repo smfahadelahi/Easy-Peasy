@@ -2,145 +2,226 @@ package com.fahad.easypeasy.ui
 
 import android.app.ActivityManager
 import android.app.Application
-import android.os.StatFs
 import android.net.Uri
+import android.os.StatFs
 import android.os.SystemClock
-import androidx.lifecycle.SavedStateHandle
-import com.fahad.easypeasy.data.*
-import com.fahad.easypeasy.engine.SpacedRepetition
-import java.time.LocalDate
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.flow.combine
-import kotlinx.serialization.json.*
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
-import com.fahad.easypeasy.data.Lessons
+import com.fahad.easypeasy.R
+import com.fahad.easypeasy.audio.AndroidSpeechOutput
+import com.fahad.easypeasy.data.*
+import com.fahad.easypeasy.engine.ModelCatalog
+import com.fahad.easypeasy.engine.SpacedRepetition
+import com.fahad.easypeasy.models.ModelDownloads
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.time.LocalDate
 import javax.inject.Inject
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.*
+import kotlinx.serialization.json.*
 
 @HiltViewModel
-class AppViewModel @Inject constructor(private val app: Application, private val dao: LearningDao, private val store: PreferenceStore, private val savedState: SavedStateHandle, private val output: com.fahad.easypeasy.audio.AndroidSpeechOutput, private val downloads: com.fahad.easypeasy.models.ModelDownloads) : AndroidViewModel(app) {
+class AppViewModel @Inject constructor(
+    private val app: Application,
+    private val dao: LearningDao,
+    private val store: PreferenceStore,
+    private val savedState: SavedStateHandle,
+    private val output: AndroidSpeechOutput,
+    private val downloads: ModelDownloads,
+) : AndroidViewModel(app) {
     private val mutable = MutableStateFlow(AppState())
     val state = mutable.asStateFlow()
     private var sessionStarted = SystemClock.elapsedRealtime()
     private var practiced = false
+    private var replayJob: Job? = null
+    private var loadJob: Job? = null
+    private val commands = Channel<suspend () -> Unit>(Channel.UNLIMITED)
+
     init {
+        // Serialize preference writes and reset; old slider writes must never resurrect a reset profile.
         viewModelScope.launch {
-            downloads.status.collect { infos ->
+            for (command in commands) guarded { command() }
+        }
+        viewModelScope.launch {
+            downloads.status.catch { notifyFailure(it) }.collect { infos ->
                 val info = infos.firstOrNull() ?: return@collect
-                mutable.update { it.copy(downloadState = info.state.name,
-                    downloadedBytes = if (info.state == androidx.work.WorkInfo.State.SUCCEEDED) com.fahad.easypeasy.engine.ModelCatalog.silero.bytes else info.progress.getLong("bytes", 0),
-                    downloadError = info.outputData.getString("error").orEmpty()) }
+                mutable.update {
+                    it.copy(
+                        downloadState = info.state.name,
+                        downloadedBytes = if (info.state == androidx.work.WorkInfo.State.SUCCEEDED) ModelCatalog.silero.bytes else info.progress.getLong("bytes", 0),
+                        downloadError = info.outputData.getString("error").orEmpty(),
+                    )
+                }
+            }
+        }
+        viewModelScope.launch {
+            val clock = flow {
+                while (currentCoroutineContext().isActive) { emit(System.currentTimeMillis()); delay(30_000) }
+            }
+            combine(dao.sessions(), dao.words(), dao.streaks(), clock) { sessions, words, streaks, now ->
+                AppState(
+                    sessions = sessions.map { SessionView(it.id, it.missionId, (it.durationSeconds / 60).toInt(), it.summary, it.day) },
+                    words = words.map { WordView(it.ko, it.bn, it.romanization, it.dueAt <= now) },
+                    streak = SpacedRepetition.streak(streaks.map { it.day }.toSet(), LocalDate.now()),
+                )
+            }.catch { notifyFailure(it) }.collect { learning ->
+                mutable.update { it.copy(sessions = learning.sessions, words = learning.words, streak = learning.streak) }
             }
         }
         reload()
-        viewModelScope.launch {
-            combine(dao.sessions(), dao.words(), dao.streaks()) { sessions, words, streaks ->
-                Triple(sessions, words, streaks)
-            }.collect { (sessions, words, streaks) ->
-                mutable.update { old -> old.copy(
-                    sessions = sessions.map { SessionView(it.id, it.missionId, (it.durationSeconds / 60).toInt(), it.summary, it.day) },
-                    words = words.map { WordView(it.ko, it.bn, it.romanization, it.dueAt <= System.currentTimeMillis()) },
-                    streak = SpacedRepetition.streak(streaks.map { it.day }.toSet(), LocalDate.now()),
-                ) }
-            }
-        }
     }
+
     fun reload() {
-        viewModelScope.launch {
-            runCatching { Lessons.load(app) }.onSuccess { chapters ->
-                val preferences = withContext(Dispatchers.IO) { store.read() }
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
+            mutable.update { it.copy(loading = true, error = null) }
+            try {
+                val chapters = Lessons.load(app)
+                val profile = withContext(Dispatchers.IO) { store.read() }
                 val memory = ActivityManager.MemoryInfo()
                 app.getSystemService(ActivityManager::class.java).getMemoryInfo(memory)
-                mutable.update { it.copy(loading = false, error = null, chapters = chapters, preferences = preferences, selectedMission = savedState["mission"] ?: "m01", memoryGb = ((memory.totalMem + (1L shl 29)) / (1L shl 30)).toInt(), storageGb = StatFs(app.filesDir.path).availableBytes / (1L shl 30)) }
-            }.onFailure { e -> mutable.update { it.copy(loading = false, error = e.message) } }
+                val freeBytes = withContext(Dispatchers.IO) { StatFs(app.filesDir.path).availableBytes }
+                mutable.update {
+                    it.copy(
+                        loading = false, error = null, chapters = chapters, preferences = profile,
+                        selectedMission = savedState["mission"] ?: "m01",
+                        memoryGb = ((memory.totalMem + (1L shl 29)) / (1L shl 30)).toInt(),
+                        storageGb = freeBytes / (1L shl 30),
+                        recommendedModel = ModelCatalog.recommended(memory.totalMem).label,
+                    )
+                }
+            } catch (cancelled: CancellationException) { throw cancelled
+            } catch (error: Exception) { mutable.update { it.copy(loading = false, error = error.message ?: "Unable to load lessons") } }
         }
     }
-    fun preferences(p: Preferences) {
-        mutable.update { it.copy(preferences = p) }
-        viewModelScope.launch { runCatching { store.write(p) }.onFailure { fail(it) } }
+
+    fun preferences(profile: Preferences) {
+        val validated = profile.copy(
+            silence = profile.silence.coerceIn(1f, 6f), speed = profile.speed.coerceIn(0.5f, 1.2f),
+            dailyMinutes = profile.dailyMinutes.coerceIn(5, 30), reminderHour = profile.reminderHour.coerceIn(0, 23),
+        )
+        mutable.update { it.copy(preferences = validated) }
+        commands.trySend {
+            store.write(validated)
+            ReminderWorker.schedule(app, validated.reminderHour, validated.reminderEnabled)
+        }
     }
-    private fun fail(e: Throwable) { mutable.update { it.copy(error = e.message ?: "Local operation failed") } }
+
+    private suspend fun guarded(block: suspend () -> Unit) {
+        try { block() } catch (cancelled: CancellationException) { throw cancelled
+        } catch (error: Exception) { notifyFailure(error) }
+    }
+    private fun notifyFailure(error: Throwable) {
+        if (error is CancellationException) throw error
+        mutable.update { it.copy(notice = error.message ?: "Local operation failed") }
+    }
+    fun dismissNotice() { mutable.update { it.copy(notice = null) } }
+
     fun selectMission(id: String) {
+        if (state.value.missions.none { it.id == id }) return
+        stopReplay()
         savedState["mission"] = id
-        sessionStarted = SystemClock.elapsedRealtime(); practiced = false
-        mutable.update { it.copy(selectedMission = id, bubbles = emptyList(), hint = "") }
+        sessionStarted = SystemClock.elapsedRealtime()
+        practiced = false
+        mutable.update { it.copy(selectedMission = id, bubbles = emptyList(), hint = "", phase = "IDLE") }
         meetWord()
     }
     private fun meetWord() {
-        val m = state.value.mission ?: return
-        viewModelScope.launch { runCatching { dao.showWord(WordEntity(m.ko, m.bn, m.romanization, System.currentTimeMillis(), System.currentTimeMillis())) }.onFailure { fail(it) } }
+        val mission = state.value.mission ?: return
+        commands.trySend {
+            val now = System.currentTimeMillis()
+            dao.showWord(WordEntity(mission.ko, mission.bn, mission.romanization, now, now))
+        }
     }
     fun demoReply() {
         val mission = state.value.mission ?: return
-        meetWord(); practiced = true
-        mutable.update { it.copy(bubbles = it.bubbles + Bubble(mission.ko, true) + Bubble(mission.ko), hint = mission.bn) }
+        meetWord()
+        practiced = true
+        mutable.update { it.copy(bubbles = (it.bubbles + Bubble(mission.ko, true) + Bubble(mission.ko)).takeLast(100), hint = mission.bn) }
     }
+
     fun replay(text: String) {
-        viewModelScope.launch {
-            try { output.stop(); output.speed = state.value.preferences.speed; output.speak(text) }
-            catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
-            catch (error: Exception) { mutable.update { it.copy(hint = error.message.orEmpty()) } }
+        if (text.isBlank()) return
+        stopReplay()
+        replayJob = viewModelScope.launch {
+            try {
+                output.speed = state.value.preferences.speed
+                mutable.update { it.copy(phase = "SPEAKING") }
+                output.speak(text)
+            } catch (cancelled: CancellationException) { throw cancelled
+            } catch (error: Exception) { mutable.update { it.copy(notice = app.getString(R.string.tts_error)) }
+            } finally { mutable.update { it.copy(phase = "IDLE") } }
         }
     }
-    fun mute() { mutable.update { it.copy(muted = !it.muted) } }
+    private fun stopReplay() { replayJob?.cancel(); replayJob = null; output.stop() }
+    fun mute() {
+        // Demo never opens a microphone. This switch stops replay, not a fictitious live session.
+        stopReplay()
+        mutable.update { it.copy(muted = !it.muted) }
+    }
+
     fun finishSession() {
-        output.stop()
+        stopReplay()
         if (!practiced) return
         practiced = false
         val mission = state.value.mission ?: return
         val duration = (SystemClock.elapsedRealtime() - sessionStarted).coerceAtLeast(0) / 1000
-        viewModelScope.launch {
-            runCatching {
-                dao.saveSession(SessionEntity(missionId = mission.id, startedAt = System.currentTimeMillis() - duration * 1000, durationSeconds = duration,
-                    day = LocalDate.now().toString(), summary = "Demo practice: ${mission.ko}", demo = true))
-            }.onFailure { fail(it) }
+        commands.trySend {
+            dao.saveSession(SessionEntity(
+                missionId = mission.id, startedAt = System.currentTimeMillis() - duration * 1000,
+                durationSeconds = duration, day = LocalDate.now().toString(),
+                summary = "Demo practice: ${mission.ko}", demo = true,
+            ))
         }
     }
     fun gradeWord(ko: String, remembered: Boolean) {
-        viewModelScope.launch {
-            runCatching {
-                val old = dao.word(ko) ?: return@runCatching
-                val next = SpacedRepetition.review(SpacedRepetition.Schedule(old.intervalDays, old.repetitions, old.ease, old.dueAt), remembered, System.currentTimeMillis())
-                dao.updateWord(old.copy(intervalDays = next.intervalDays, repetitions = next.repetitions, ease = next.ease, dueAt = next.dueAt))
-            }.onFailure { fail(it) }
-        }
+        commands.trySend { dao.reviewWord(ko, remembered, System.currentTimeMillis()) }
     }
     fun download() { downloads.start(state.value.preferences.wifiOnly) }
     fun pauseDownload() { downloads.pause() }
-    fun startLive() { mutable.update { it.copy(hint = "Live voice unavailable: Korean STT is not installed. This is a demo build.") } }
-    override fun onCleared() { output.stop(); super.onCleared() }
+    fun startLive() { mutable.update { it.copy(notice = app.getString(R.string.missing_models)) } }
+
     fun reset() {
-        output.stop()
-        viewModelScope.launch {
-            runCatching {
-                dao.reset(); store.write(Preferences())
-                savedState["mission"] = "m01"
-                mutable.update { AppState(loading = false, chapters = it.chapters, memoryGb = it.memoryGb, storageGb = it.storageGb) }
-            }.onFailure { fail(it) }
+        stopReplay()
+        practiced = false
+        commands.trySend {
+            dao.reset()
+            store.write(Preferences())
+            ReminderWorker.schedule(app, 20, false)
+            savedState["mission"] = "m01"
+            mutable.update {
+                it.copy(preferences = Preferences(), selectedMission = "m01", sessions = emptyList(), words = emptyList(), bubbles = emptyList(), hint = "", streak = 0)
+            }
         }
     }
+
     fun exportData(uri: Uri) {
-        viewModelScope.launch(Dispatchers.IO) {
-            runCatching {
+        // Queue behind pending writes. Snapshot is transactional and the file is written off Main.
+        commands.trySend {
+            val snapshot = dao.exportSnapshot()
+            val profile = state.value.preferences
+            withContext(Dispatchers.IO) {
                 val json = buildJsonObject {
                     put("formatVersion", 1)
-                    put("sessions", buildJsonArray { dao.allSessions().forEach { row -> add(buildJsonObject {
-                        put("mission", row.missionId); put("startedAt", row.startedAt); put("durationSeconds", row.durationSeconds); put("summary", row.summary); put("demo", row.demo)
+                    put("sessions", buildJsonArray { snapshot.sessions.forEach { row -> add(buildJsonObject {
+                        put("id", row.id); put("mission", row.missionId); put("day", row.day); put("startedAt", row.startedAt)
+                        put("durationSeconds", row.durationSeconds); put("summary", row.summary); put("demo", row.demo)
                     }) } })
-                    put("vocabulary", buildJsonArray { dao.allWords().forEach { row -> add(buildJsonObject {
-                        put("ko", row.ko); put("bn", row.bn); put("romanization", row.romanization); put("dueAt", row.dueAt); put("intervalDays", row.intervalDays); put("repetitions", row.repetitions); put("ease", row.ease)
+                    put("vocabulary", buildJsonArray { snapshot.words.forEach { row -> add(buildJsonObject {
+                        put("ko", row.ko); put("bn", row.bn); put("romanization", row.romanization); put("shownAt", row.shownAt)
+                        put("dueAt", row.dueAt); put("intervalDays", row.intervalDays); put("repetitions", row.repetitions); put("ease", row.ease)
                     }) } })
-                    put("mistakes", buildJsonArray { dao.allMistakes().forEach { row -> add(buildJsonObject { put("original", row.original); put("correction", row.correction) }) } })
-                    put("preferences", Json.encodeToJsonElement(Preferences.serializer(), state.value.preferences))
+                    put("mistakes", buildJsonArray { snapshot.mistakes.forEach { row -> add(buildJsonObject {
+                        put("sessionId", row.sessionId); put("original", row.original); put("correction", row.correction)
+                    }) } })
+                    put("preferences", Json.encodeToJsonElement(Preferences.serializer(), profile))
                 }
-                checkNotNull(app.contentResolver.openOutputStream(uri)).bufferedWriter().use { it.write(json.toString()) }
-            }.onFailure { fail(it) }
+                checkNotNull(app.contentResolver.openOutputStream(uri, "wt")).bufferedWriter().use { it.write(json.toString()) }
+            }
+            mutable.update { it.copy(notice = app.getString(R.string.saved)) }
         }
     }
+    override fun onCleared() { stopReplay(); commands.close(); super.onCleared() }
 }

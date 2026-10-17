@@ -6,6 +6,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.platform.LocalConfiguration
+import com.fahad.easypeasy.R
 
 private val Light = lightColorScheme(
     primary = Color(0xFF653D83), onPrimary = Color.White,
@@ -22,6 +26,15 @@ private val Dark = darkColorScheme(
 )
 @Composable
 fun EasyPeasyTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = if (dark) Dark else Light,
+    val family = FontFamily(Font(if (LocalConfiguration.current.locales[0].language == "bn") R.font.noto_sans_bengali else R.font.noto_sans_kr))
+    val base = Typography()
+    val type = Typography(
+        displayLarge = base.displayLarge.copy(fontFamily = family), displayMedium = base.displayMedium.copy(fontFamily = family), displaySmall = base.displaySmall.copy(fontFamily = family),
+        headlineLarge = base.headlineLarge.copy(fontFamily = family), headlineMedium = base.headlineMedium.copy(fontFamily = family), headlineSmall = base.headlineSmall.copy(fontFamily = family),
+        titleLarge = base.titleLarge.copy(fontFamily = family), titleMedium = base.titleMedium.copy(fontFamily = family), titleSmall = base.titleSmall.copy(fontFamily = family),
+        bodyLarge = base.bodyLarge.copy(fontFamily = family), bodyMedium = base.bodyMedium.copy(fontFamily = family), bodySmall = base.bodySmall.copy(fontFamily = family),
+        labelLarge = base.labelLarge.copy(fontFamily = family), labelMedium = base.labelMedium.copy(fontFamily = family), labelSmall = base.labelSmall.copy(fontFamily = family),
+    )
+    MaterialTheme(typography = type, colorScheme = if (dark) Dark else Light,
         shapes = Shapes(medium = RoundedCornerShape(24.dp), large = RoundedCornerShape(24.dp)), content = content)
 }

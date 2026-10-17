@@ -7,18 +7,20 @@ data class SessionView(val id: Long, val missionId: String, val minutes: Int, va
 data class Bubble(val text: String, val learner: Boolean = false)
 @kotlinx.serialization.Serializable
 data class Preferences(
+    val proficiency: Int = 0, val goal: Int = 0, val reminderEnabled: Boolean = false,
     val onboarded: Boolean = false, val bangla: Boolean = false, val silence: Float = 3.5f,
     val speed: Float = 0.85f, val dailyMinutes: Int = 10, val romanization: Boolean = true,
     val hints: Boolean = true, val dark: Boolean = false, val reduceMotion: Boolean = false,
     val wifiOnly: Boolean = true, val reminderHour: Int = 20,
 )
 data class AppState(
-    val loading: Boolean = true, val error: String? = null,
+    val loading: Boolean = true, val error: String? = null, val notice: String? = null,
     val chapters: List<Chapter> = emptyList(), val preferences: Preferences = Preferences(),
     val sessions: List<SessionView> = emptyList(), val words: List<WordView> = emptyList(),
     val bubbles: List<Bubble> = emptyList(), val selectedMission: String = "m01",
     val hint: String = "", val phase: String = "IDLE", val muted: Boolean = false,
     val downloadState: String = "NOT_DOWNLOADED", val downloadedBytes: Long = 0, val downloadError: String = "",
+    val recommendedModel: String = "Gemma 1B",
     val memoryGb: Int = 0, val storageGb: Long = 0, val streak: Int = 0,
 ) {
     val missions get() = chapters.flatMap { it.missions }
